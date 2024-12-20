@@ -41,12 +41,15 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
-        if os.path.exists(os.path.join(args.source_path, "cameras.txt")):
+        if os.path.exists(os.path.join(args.source_path, "cameras.txt")) and 'RNN' in args.source_path:
             if glob.glob(os.path.join(args.source_path, "*_poses.txt")):
                 print("RNN dataset detected!")
                 scene_info = sceneLoadTypeCallbacks["RNN"](args.source_path, args.images, args.depths, args.eval)
             else:
                 assert False, "Could not recognize scene type!"
+        if 'C3VD' in args.source_path:
+            print('C3VD dataset detected!')
+            scene_info = sceneLoadTypeCallbacks["C3VD"](args.source_path, args.images, args.depths, args.eval)
         elif os.path.exists(os.path.join(args.source_path, "sparse")):
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
@@ -69,9 +72,9 @@ class Scene:
             with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
                 json.dump(json_cams, file)
 
-        if shuffle:
-            random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
-            random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
+        # if shuffle:
+        #     random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
+        #     random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 

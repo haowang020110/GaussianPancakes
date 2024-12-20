@@ -15,3 +15,8 @@ lpipsPyTorch
 eval/
 **/*egg-info/
 environment_old.yml
+output/
+data/
+c3vd_preprocess.py
+note.py
+c3vd_preprocess.py

@@ -24,7 +24,8 @@ from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 from scene.rnnslam_loader import readRNN
-from utils.obj_utils import read_obj 
+from scene.C3VD_loader import readC3VD, init_pts_C3VD
+from utils.obj_utils import read_obj, downsample_obj
 
 class CameraInfo(NamedTuple):
     uid: int
@@ -327,9 +328,66 @@ def readRNNSceneInfo(path, images, depths, eval, llffhold=8):
                            ply_path=ply_path)
     return scene_info
 
+def readC3VDSceneInfo(path, images, depths, eval, llffhold=8):
+    print('Reading C3VD scene info from', path)
+    extr_file_path = os.path.join(path, "camera_pose.txt")
+    print('Loading extrinsics from', extr_file_path)
+    intrinsics_file = "camera.json"
+    intr_file_path = os.path.join(path, intrinsics_file)
+    print('Loading intrinsics from', intr_file_path)
+    reading_dir = "images" if images == None else images
+    depths_dir = "depths" if depths == None else depths
+
+    cam_infos_unsorted = readC3VD(extrinsics_file=extr_file_path, intrinsics_file=intr_file_path, 
+                                    images_folder=os.path.join(path, reading_dir), depths_folder=os.path.join(path, depths_dir))
+    # print(cam_infos_unsorted)
+    cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.uid)
+
+    if eval:
+        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
+        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
+    else:
+        train_cam_infos = cam_infos
+        test_cam_infos = []
+
+    nerf_normalization = getNerfppNorm(train_cam_infos)
+
+    # Because we do not have RNNSLAM Code, we choose histoli
+    # obj_file = [f for f in os.listdir(path) if f.endswith(".obj")][0]
+    # obj_path = os.path.join(path, obj_file)
+    ply_path = os.path.join(path, "points3D_pancakes.ply")
+
+    # convert obj to ply
+    if not os.path.exists(ply_path):
+        # depth cam
+
+        # random
+        num_pts = 20_000
+        print(f"Generating random point cloud ({num_pts})...")
+        xyz, rgbs, normals = init_pts_C3VD(train_cam_infos, total_pts=num_pts)
+
+        # We create random points inside the bounds of the synthetic Blender scenes
+        # xyz = np.random.random((num_pts, 3)) * 101 - 1
+        # shs = np.random.random((num_pts, 3)) / 255.0
+        pcd = BasicPointCloud(points=xyz, colors=rgbs, normals=normals)
+        # pcd = downsample_obj(pcd, 1)
+        print('pcd', pcd.points.shape, pcd.colors.shape, pcd.normals.shape)
+        storePly(ply_path, pcd.points, pcd.colors * 255)
+    try:
+        pcd = fetchPly(ply_path)
+    except:
+        pcd = None
+
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=ply_path)
+    return scene_info
 
 sceneLoadTypeCallbacks = {
     "Colmap": readColmapSceneInfo,
     "Blender" : readNerfSyntheticInfo, 
     "RNN" : readRNNSceneInfo,
+    "C3VD": readC3VDSceneInfo,
 }

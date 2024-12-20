@@ -11,6 +11,7 @@
 
 from pathlib import Path
 import os
+import numpy as np
 from PIL import Image
 import torch
 import torchvision.transforms.functional as tf
@@ -21,7 +22,7 @@ import json
 from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser
-
+import cv2
 def rescale_image(img, new_min=0, new_max=255):
     old_min, old_max = img.getextrema()
     scale = (new_max - new_min) / (old_max - old_min)
@@ -56,14 +57,14 @@ def readDepths(renders_dir, gt_dir):
     image_names = []
     for fname in os.listdir(renders_dir):
         if fname.endswith("_depth.png"): 
-            render = Image.open(renders_dir / fname).convert("L")
-            gt = Image.open(gt_dir / fname).convert("L")
-
+            # render = Image.open(renders_dir / fname).convert("L")
+            # gt = Image.open(gt_dir / fname).convert("L")
+            render = np.array(cv2.imread(renders_dir / fname,-1))
+            gt = np.array(cv2.imread(gt_dir / fname,-1))
             # ---- testing next two line ----
-            # make sure both are between 0-255
-            render = rescale_image(render)
-            #gt = rescale_image(gt)
-
+            # make sure both are between 0-100 
+            render = render / (2**16 - 1) * 100.0
+            gt = gt / (2**16 - 1) * 100.0
             render_tensor = tf.to_tensor(render)
             gt_tensor = tf.to_tensor(gt)
             # render_tensor = normalize_tensor_to_range(render_tensor, 0, 1)
@@ -104,7 +105,7 @@ def evaluate(model_paths, train_times):
                 gt_dir = method_dir/ "gt"
                 renders_dir = method_dir / "renders"
                 renders, gts, image_names = readImages(renders_dir, gt_dir)
-
+                # print('renders:', len(renders), renders)
                 depths, gt_depths, depth_image_names = readDepths(renders_dir, gt_dir)
 
                 depths_mse = []

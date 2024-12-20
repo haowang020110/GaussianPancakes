@@ -21,7 +21,8 @@ from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import GaussianModel
 from utils.spiral_utils import spiral_cam_info
-
+import cv2
+import numpy as np
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
@@ -35,10 +36,17 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         depth = renderpkg["depth"]
         gt = view.original_image[0:3, :, :]
         gt_depth = view.original_depth[0:3, :, :]
+        # print('gt_depth_range', gt_depth.min().item(), '---', gt_depth.max().item())
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
-        torchvision.utils.save_image(depth, os.path.join(render_path, '{0:05d}'.format(idx) + "_depth.png"))
-        torchvision.utils.save_image(gt_depth, os.path.join(gts_path, '{0:05d}'.format(idx) + "_depth.png"))
+        depth = depth.cpu().numpy().transpose(1, 2, 0)
+        gt_depth = gt_depth.cpu().numpy().transpose(1, 2, 0)
+        depth = np.array(depth / 100 * (2**16 - 1)).astype(np.uint16)
+        gt_depth = np.array(gt_depth / 100 * (2**16 - 1)).astype(np.uint16)
+        cv2.imwrite(os.path.join(render_path, '{0:05d}'.format(idx) + "_depth.png"), depth)
+        cv2.imwrite(os.path.join(gts_path, '{0:05d}'.format(idx) + "_depth.png"), gt_depth)
+        # torchvision.utils.save_image(depth/100, os.path.join(render_path, '{0:05d}'.format(idx) + "_depth.png"))
+        # torchvision.utils.save_image(gt_depth/100, os.path.join(gts_path, '{0:05d}'.format(idx) + "_depth.png"))
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_spiral : bool):
     with torch.no_grad():
